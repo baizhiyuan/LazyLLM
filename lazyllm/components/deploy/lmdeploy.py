@@ -1,6 +1,7 @@
 import os
 import json
 import random
+import importlib.util
 
 import lazyllm
 from lazyllm import launchers, LazyLLMCMD, ArgsDict, LOG
@@ -35,7 +36,7 @@ class LMDeploy(LazyLLMDeployBase):
     }
     auto_map = {}
 
-    def __init__(self, launcher=launchers.remote(ngpus=1), stream=False, log_path=None, **kw):
+    def __init__(self, launcher=launchers.remote(ngpus=1), log_path=None, **kw):
         super().__init__(launcher=launcher)
         self.kw = ArgsDict({
             'server-name': '0.0.0.0',
@@ -57,7 +58,7 @@ class LMDeploy(LazyLLMDeployBase):
                             f"base_model({base_model}) will be used")
             finetuned_model = base_model
 
-        model_type = ModelManager.get_model_type(finetuned_model)
+        model_type = ModelManager.get_model_type(base_model or finetuned_model)
         if model_type == 'vlm':
             self.kw.pop("chat-template")
         else:
@@ -72,7 +73,6 @@ class LMDeploy(LazyLLMDeployBase):
                 self.kw['server-port'] = random.randint(30000, 40000)
             cmd = f"lmdeploy serve api_server {finetuned_model} "
 
-            import importlib.util
             if importlib.util.find_spec("torch_npu") is not None:
                 cmd += "--device ascend --eager-mode "
 

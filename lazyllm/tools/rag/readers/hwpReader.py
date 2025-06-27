@@ -1,11 +1,10 @@
 from fsspec import AbstractFileSystem
 from pathlib import Path
-import struct
-from typing import Optional, Dict, List, Any
-import zlib
+from typing import Optional, List, Any
 
 from .readerBase import LazyLLMReaderBase
 from ..doc_node import DocNode
+from lazyllm.thirdparty import zlib, struct, olefile
 from lazyllm import LOG
 
 class HWPReader(LazyLLMReaderBase):
@@ -18,13 +17,7 @@ class HWPReader(LazyLLMReaderBase):
         self._HWP_TEXT_TAGS = [67]
         self._text = ""
 
-    def _load_data(self, file: Path, extra_info: Optional[Dict] = None,
-                   fs: Optional[AbstractFileSystem] = None) -> List[DocNode]:
-        try:
-            import olefile
-        except ImportError:
-            raise ImportError("olefile is required to read hwp files: `pip install olefile`")
-
+    def _load_data(self, file: Path, fs: Optional[AbstractFileSystem] = None) -> List[DocNode]:
         if fs:
             LOG.warning("fs was specified but HWPReader doesn't support loading from "
                         "fsspec filesystems. Will load from local filesystem instead.")
@@ -36,14 +29,11 @@ class HWPReader(LazyLLMReaderBase):
         if self._is_valid(file_dir) is False: raise Exception("Not Valid HwpFile")
 
         result_text = self._get_text(load_file, file_dir)
-        return [DocNode(text=result_text, global_metadata=extra_info)]
+        return [DocNode(text=result_text)]
 
     def _is_valid(self, dirs: List[str]) -> bool:
         if [self._FILE_HEADER_SECTION] not in dirs: return False
         return [self._HWP_SUMMARY_SECTION] in dirs
-
-    def _text_to_docnode(self, text: str, extra_info: Optional[Dict] = None) -> DocNode:
-        return DocNode(text=text, metadata=extra_info or {})
 
     def _get_text(self, load_file: Any, file_dirs: List[str]) -> str:
         sections = self._get_body_sections(file_dirs)

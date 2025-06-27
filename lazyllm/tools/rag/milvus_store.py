@@ -189,6 +189,14 @@ class MilvusStore(StoreBase):
         return self._map_store.get_nodes(group_name, uids)
 
     @override
+    def activate_group(self, group_names: Union[str, List[str]]) -> bool:
+        return self._map_store.activate_group(group_names)
+
+    @override
+    def activated_groups(self):
+        return self._map_store.activated_groups()
+
+    @override
     def is_group_active(self, name: str) -> bool:
         return self._map_store.is_group_active(name)
 
@@ -211,7 +219,7 @@ class MilvusStore(StoreBase):
               query: str,
               group_name: str,
               similarity_name: Optional[str] = None,
-              similarity_cut_off: Optional[Union[float, Dict[str, float]]] = None,
+              similarity_cut_off: Optional[Union[float, Dict[str, float]]] = float('-inf'),
               topk: int = 10,
               embed_keys: Optional[List[str]] = None,
               filters: Optional[Dict[str, Union[List, set]]] = None,
@@ -224,7 +232,7 @@ class MilvusStore(StoreBase):
 
         filter_str = self._construct_filter_expr(filters) if filters else ""
 
-        uidset = set()
+        uid_score = {}
         for key in embed_keys:
             embed_func = self._embed.get(key)
             query_embedding = embed_func(query)
@@ -234,11 +242,16 @@ class MilvusStore(StoreBase):
             # we have only one `data` for search() so there is only one result in `results`
             if len(results) != 1:
                 raise ValueError(f'number of results [{len(results)}] != expected [1]')
+            sim_cut_off = similarity_cut_off if isinstance(similarity_cut_off, float) else similarity_cut_off[key]
 
             for result in results[0]:
-                uidset.add(result['id'])
-
-        return self._map_store.get_nodes(group_name, list(uidset))
+                if result['distance'] < sim_cut_off:
+                    continue
+                uid_score[result['id']] = result['distance'] if result['id'] not in uid_score \
+                    else max(uid_score[result['id']], result['distance'])
+        uids = list(uid_score.keys())
+        nodes = self._map_store.get_nodes(group_name, uids)
+        return [node.with_sim_score(uid_score[node._uid]) for node in nodes]
 
     # ----- internal helper functions ----- #
 
@@ -293,7 +306,9 @@ class MilvusStore(StoreBase):
                 raise ValueError(f'cannot find desc of field [{name}]')
 
             key = self._gen_field_key(name)
-            if (not isinstance(candidates, List)) and (not isinstance(candidates, Set)):
+            if isinstance(candidates, str):
+                candidates = [candidates]
+            elif (not isinstance(candidates, list)) and (not isinstance(candidates, set)):
                 candidates = list(candidates)
             if desc.data_type == DataType.ARRAY:
                 # https://github.com/milvus-io/milvus/discussions/35279

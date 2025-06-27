@@ -4,7 +4,10 @@ from io import BytesIO
 from pathlib import Path
 from typing import Dict, List, Optional, cast
 from fsspec import AbstractFileSystem
+
+from lazyllm import thirdparty
 from lazyllm.thirdparty import PIL
+from lazyllm.thirdparty import transformers as tf
 
 from .readerBase import LazyLLMReaderBase, infer_torch_device
 from ..doc_node import ImageDocNode
@@ -35,17 +38,10 @@ class ImageReader(LazyLLMReaderBase):
                 processor = None
                 model = pytesseract
             else:
-                try:
-                    import sentencepiece  # noqa
-                    import torch  # noqa
-                    from PIL import Image  # noqa
-                    from transformers import DonutProcessor, VisionEncoderDecoderModel
-                except ImportError:
-                    raise ImportError("Please install extra dependencies that are required for the "
-                                      "ImageCaptionReader: `pip install torch transformers sentencepiece Pillow`")
+                thirdparty.check_packages(["sentencepiece", "torch", "transformers"])
 
-                processor = DonutProcessor.from_pretrained("naver-clova-ix/donut-base-finetuned-cord-v2")
-                model = VisionEncoderDecoderModel.from_pretrained("naver-clova-ix/donut-base-finetuned-cord-v2")
+                processor = tf.DonutProcessor.from_pretrained("naver-clova-ix/donut-base-finetuned-cord-v2")
+                model = tf.VisionEncoderDecoderModel.from_pretrained("naver-clova-ix/donut-base-finetuned-cord-v2")
             parser_config = {'processor': processor, 'model': model}
 
         self._parser_config = parser_config
@@ -53,8 +49,7 @@ class ImageReader(LazyLLMReaderBase):
         self._parse_text = parse_text
         self._pytesseract_model_kwargs = pytesseract_model_kwargs or {}
 
-    def _load_data(self, file: Path, extra_info: Optional[Dict] = None,
-                   fs: Optional[AbstractFileSystem] = None) -> List[ImageDocNode]:
+    def _load_data(self, file: Path, fs: Optional[AbstractFileSystem] = None) -> List[ImageDocNode]:
         if not isinstance(file, Path): file = Path(file)
 
         if fs:
@@ -99,4 +94,4 @@ class ImageReader(LazyLLMReaderBase):
                 model = cast(pytesseract, self._parser_config['model'])
                 text_str = model.image_to_string(image, **self._pytesseract_model_kwargs)
 
-        return [ImageDocNode(text=text_str, image_path=str(file), global_metadata=extra_info)]
+        return [ImageDocNode(text=text_str, image_path=str(file))]

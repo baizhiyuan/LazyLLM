@@ -19,6 +19,8 @@ async def receive_json(data: dict):
     return JSONResponse(content=data)
 
 
+@pytest.mark.skip_on_win
+@pytest.mark.skip_on_mac
 class TestEngine(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -128,8 +130,8 @@ class TestEngine(unittest.TestCase):
         resources = [
             dict(id='00', kind='OnlineEmbedding', name='e0', args=dict(source='glm')),
             dict(id='01', kind='OnlineEmbedding', name='e1', args=dict(type='rerank')),
-            dict(id='0', kind='Document', name='d1', args=dict(dataset_path='rag_master', embed='00', node_group=[
-                dict(name='sentence', transform='SentenceSplitter', chunk_size=100, chunk_overlap=10)]))]
+            dict(id='0', kind='Document', name='d1', args=dict(dataset_path='rag_master', node_group=[
+                dict(name='sentence', embed='00', transform='SentenceSplitter', chunk_size=100, chunk_overlap=10)]))]
         nodes = [dict(id='1', kind='Retriever', name='ret1',
                       args=dict(doc='0', group_name='CoarseChunk', similarity='bm25_chinese', topk=3)),
                  dict(id='2', kind='Retriever', name='ret2',
@@ -151,8 +153,6 @@ class TestEngine(unittest.TestCase):
         r = engine.run(gid, '何为天道?')
         assert '观天之道，执天之行' in r or '天命之谓性，率性之谓道' in r or '执古之道，以御今之有' in r
 
-    @pytest.mark.skip_on_win
-    @pytest.mark.skip_on_mac
     def test_sql_call(self):
         db_type = "PostgreSQL"
         username, password, host, port, database = get_db_init_keywords(db_type)
@@ -232,20 +232,21 @@ class TestEngine(unittest.TestCase):
         builtin_history = [['水的沸点是多少？', '您好，我的答案是：水的沸点在标准大气压下是100摄氏度。'],
                            ['世界上最大的动物是什么？', '您好，我的答案是：蓝鲸是世界上最大的动物。'],
                            ['人一天需要喝多少水？', '您好，我的答案是：一般建议每天喝8杯水，大约2升。']]
-        nodes = [dict(id='1', kind='OnlineLLM', name='m1', args=dict(source='glm', stream=True, prompt=dict(
+        nodes = [dict(id='1', kind='LLM', name='m1', args=dict(source='glm', stream=True, type='online', keys=['query'],
+                                                               prompt=dict(
                       system='请将我的问题翻译成中文。请注意，请直接输出翻译后的问题，不要反问和发挥',
                       user='问题: {query} \n, 翻译:'))),
-                 dict(id='2', kind='OnlineLLM', name='m2',
-                      args=dict(source='glm', stream=True,
+                 dict(id='2', kind='LLM', name='m2',
+                      args=dict(source='glm', stream=True, type='online',
                                 prompt=dict(system='请参考历史对话，回答问题，并保持格式不变。', user='{query}'))),
-                 dict(id='3', kind='JoinFormatter', name='join', args=dict(type='to_dict', names=['query', 'answer'])),
-                 dict(id='4', kind='OnlineLLM', stream=False, name='m3',
-                      args=dict(source='glm', history=builtin_history, prompt=dict(
+                 dict(id='3', kind='LLM', stream=False, name='m3',
+                      args=dict(source='glm', type='online', keys=['query', 'answer'], history=builtin_history,
+                                prompt=dict(
                           system='你是一个问答机器人，会根据用户的问题作出回答。',
                           user='请结合历史对话和本轮的问题，总结我们的全部对话。本轮情况如下:\n {query}, 回答: {answer}')))]
         engine = LightEngine()
         gid = engine.start(nodes, edges=[['__start__', '1'], ['1', '2'], ['1', '3'], ['2', '3'],
-                                         ['3', '4'], ['4', '__end__']], _history_ids=['2', '4'])
+                                         ['3', '__end__']], _history_ids=['2', '3'])
         history = [['雨后为什么会有彩虹？', '您好，我的答案是：雨后阳光通过水滴发生折射和反射形成了彩虹。'],
                    ['月亮会发光吗？', '您好，我的答案是：月亮本身不会发光，它反射太阳光。'],
                    ['一年有多少天', '您好，我的答案是：一年有365天，闰年有366天。']]
@@ -278,3 +279,36 @@ class TestEngine(unittest.TestCase):
 
             res = engine.online_model_validate_api_key(token + 'ss', source=source)
             assert res is False
+
+    def test_tools_with_llm(self):
+        resources = [dict(id='0', kind='OnlineLLM', name='base', args=dict(source="qwen"))]
+        nodes = [dict(id="1", kind="QustionRewrite", name="m1", args=dict(base_model='0', formatter="str")),
+                 dict(id="2", kind="QustionRewrite", name="m2", args=dict(base_model='0', formatter="list")),
+                 dict(id="3", kind="ParameterExtractor", name="m3", args=dict(
+                      base_model='0', param=["year"], type=["int"], description=["年份"], require=[True])),
+                 dict(id="4", kind="ParameterExtractor", name="m4", args=dict(
+                      base_model='0', param=["year", "month"], type=["int", "int"], description=["年份", "月份"],
+                      require=[True, True])),
+                 dict(id="5", kind="CodeGenerator", name="m5", args=dict(base_model='0'))]
+
+        engine = LightEngine()
+        gid = engine.start(nodes, [['__start__', '1'], ['1', '__end__']], resources)
+        res = engine.run(gid, "Model Context Protocol是啥")
+        assert isinstance(res, str)
+
+        gid = engine.start(nodes, [['__start__', '2'], ['2', '__end__']], resources)
+        res = engine.run(gid, "RAG是什么？")
+        assert isinstance(res, list) and len(res) > 0
+
+        gid = engine.start(nodes, [['__start__', '3'], ['3', '__end__']], resources)
+        res = engine.run(gid, "This year is 2023")
+        assert res == 2023
+
+        gid = engine.start(nodes, [['__start__', '4'], ['4', '__end__']], resources)
+        res = engine.run(gid, "Today is 2022/06/06")
+        assert res[0] == 2022 and res[1] == 6
+
+        gid = engine.start(nodes, [['__start__', '5'], ['5', '__end__']], resources)
+        res = engine.run(gid, "帮我写一个函数，计算两数之和")
+        compiled = lazyllm.common.utils.compile_func(res)
+        assert compiled(2, 3) == 5

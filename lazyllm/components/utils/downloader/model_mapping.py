@@ -175,7 +175,28 @@ model_name_mapping = {
         },
         "type": "reranker"
     },
+    "bge-reranker-v2-m3": {
+        "source": {
+            "huggingface": "BAAI/bge-reranker-v2-m3",
+            "modelscope": "BAAI/bge-reranker-v2-m3"
+        },
+        "type": "reranker"
+    },
+    "bge-vl-v1.5-mmeb": {
+        "source": {
+            "huggingface": "BAAI/BGE-VL-v1.5-mmeb",
+            "modelscope": "BAAI/BGE-VL-v1.5-mmeb"
+        },
+        "type": "cross_modal_embed" # image - text
+    },
     "chattts": {
+        "source": {
+            "huggingface": "2Noise/ChatTTS",
+            "modelscope": "AI-ModelScope/ChatTTS"
+        },
+        "type": "tts"
+    },
+    "chattts-new": {
         "source": {
             "huggingface": "2Noise/ChatTTS",
             "modelscope": "AI-ModelScope/ChatTTS"
@@ -224,6 +245,20 @@ model_name_mapping = {
         },
         "type": "vlm"
     },
+    "qwen2.5-vl-3b-instruct": {
+        "source": {
+            "huggingface": "Qwen/Qwen2.5-VL-3B-Instruct",
+            "modelscope": "Qwen/Qwen2.5-VL-3B-Instruct"
+        },
+        "type": "vlm"
+    },
+    "qwen2.5-vl-32b-instruct": {
+        "source": {
+            "huggingface": "Qwen/Qwen2.5-VL-32B-Instruct",
+            "modelscope": "Qwen/Qwen2.5-VL-32B-Instruct"
+        },
+        "type": "vlm"
+    },
     "musicgen-medium": {
         "source": {
             "huggingface": "facebook/musicgen-medium",
@@ -251,5 +286,53 @@ model_name_mapping = {
             "modelscope": "AI-ModelScope/stable-diffusion-3-medium-diffusers"
         },
         "type": "sd"
+    },
+    "stable-diffusion-3_5-large": {
+        "source": {
+            "huggingface": "stabilityai/stable-diffusion-3.5-large",
+            "modelscope": "AI-ModelScope/stable-diffusion-3.5-large"
+        },
+        "type": "sd"
+    },
+    "flux.1-dev": {
+        "source": {
+            "huggingface": "black-forest-labs/FLUX.1-dev",
+            "modelscope": "MusePublic/489_ckpt_FLUX_1"
+        },
+        "type": "sd"
+    },
+    "cogview4-6b": {
+        "source": {
+            "huggingface": "THUDM/CogView4-6B",
+            "modelscope": "ZhipuAI/CogView4-6B"
+        },
+        "type": "sd"
+    },
+    "wan2_1-t2v-1_3b-diffusers": {
+        "source": {
+            "huggingface": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers",
+            "modelscope": "Wan-AI/Wan2.1-T2V-1.3B-Diffusers"
+        },
+        "type": "sd"
+    },
+    "pp-ocrv4_server": {
+        "source": {},
+        "download_by_other":True,
+        "type": "ocr"
+    },
+    "pp-ocrv4_mobile": {
+        "source": {},
+        "download_by_other":True,
+        "type": "ocr"
+    },
+    "pp-ocrv5_server": {
+        "source": {},
+        "download_by_other":True,
+        "type": "ocr"
+    },
+    "pp-ocrv5_mobile": {
+        "source": {},
+        "download_by_other":True,
+        "type": "ocr"
     }
 }

@@ -238,7 +238,7 @@ class TestEngine(object):
         token = '123'
         engine = LightEngine()
         engine.launch_localllm_infer_service()
-        jobid, _ = engine.deploy_model(token, 'ChatTTS')
+        jobid, _ = engine.deploy_model(token, 'ChatTTS-new')
         engine.infer_client.wait_ready(token, jobid)
         r = engine.get_infra_handle(token, jobid)
         assert isinstance(r, lazyllm.TrainableModule) and r._impl._get_deploy_tasks.flag
@@ -250,3 +250,15 @@ class TestEngine(object):
 
         r = engine.run(gid, "这张图片描述的是什么？")
         assert '.wav' in r
+
+    @pytest.mark.skip(reason='environment not ready')
+    def test_OCR(self):
+        nodes = [dict(id='1', kind='OCR', name='m1', args=dict(model="PP-OCRv5_mobile"))]
+        edges = [dict(iid='__start__', oid='1'), dict(iid='1', oid='__end__')]
+        data_root_dir = os.getenv("LAZYLLM_DATA_PATH")
+        input = os.path.join(data_root_dir, "rag_master/default/__data/pdfs/reading_report_p1.pdf")
+        engine = LightEngine()
+        gid = engine.start(nodes, edges)
+        data = engine.run(gid, input)
+        verify = lazyllm.components.ocr.pp_ocr.OCR("PP-OCRv5_mobile")(input)
+        assert len(data) == len(verify)

@@ -1,4 +1,5 @@
 import os
+import importlib.util
 from urllib.parse import urlparse
 
 import lazyllm
@@ -27,7 +28,6 @@ class SenseVoice(object):
             lazyllm.call_once(self.init_flag, self.load_stt)
 
     def load_stt(self):
-        import importlib.util
         if importlib.util.find_spec("torch_npu") is not None:
             import torch_npu  # noqa F401
             from torch_npu.contrib import transfer_to_npu  # noqa F401
@@ -85,7 +85,7 @@ class SenseVoiceDeploy(object):
     default_headers = {'Content-Type': 'application/json'}
 
     def __init__(self, launcher=None, log_path=None):
-        self.launcher = launcher
+        self._launcher = launcher
         self._log_path = log_path
 
     def __call__(self, finetuned_model=None, base_model=None):
@@ -97,5 +97,5 @@ class SenseVoiceDeploy(object):
             LOG.warning(f"Note! That finetuned_model({finetuned_model}) is an invalid path, "
                         f"base_model({base_model}) will be used")
             finetuned_model = base_model
-        return lazyllm.deploy.RelayServer(func=SenseVoice(finetuned_model), launcher=self.launcher,
+        return lazyllm.deploy.RelayServer(func=SenseVoice(finetuned_model), launcher=self._launcher,
                                           log_path=self._log_path, cls='sensevoice')()

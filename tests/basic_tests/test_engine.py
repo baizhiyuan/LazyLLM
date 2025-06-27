@@ -11,6 +11,7 @@ import subprocess
 import socket
 import threading
 import requests
+import os
 
 HOOK_PORT = 33733
 HOOK_ROUTE = "mock_post"
@@ -44,6 +45,8 @@ if __name__ == "__main__":
 )
 
 
+@pytest.mark.skip_on_win
+@pytest.mark.skip_on_mac
 class TestEngine(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
@@ -289,6 +292,32 @@ class TestEngine(unittest.TestCase):
         assert engine.run(gid, 2, 3, 4, 5) == (4, 9, 16, 25)
         assert "prompt_tokens" in self.get_last_report()
 
+    def test_engine_warp_transform(self):
+        nodes = [dict(id='1', kind='Code', name='code', args=dict(
+            code='def sum(x: int, y: int, z: int): return x + y + z'))]
+        edges = [dict(iid='__start__', oid='1'), dict(iid='1', oid='__end__')]
+
+        nodes = [
+            dict(
+                id="2",
+                kind="Warp",
+                name="warp",
+                args=dict(
+                    nodes=nodes,
+                    edges=edges,
+                    batch_flags=[True, False, True],
+                    _lazyllm_enable_report=True,
+                ),
+            )
+        ]
+        edges = [dict(iid='__start__', oid='2'), dict(iid='2', oid='__end__')]
+
+        engine = LightEngine()
+        engine.set_report_url(self.report_url)
+        gid = engine.start(nodes, edges)
+        assert engine.run(gid, [2, 3, 4, 5], 1, [1, 2, 3, 1]) == (4, 6, 8, 7)
+        assert "prompt_tokens" in self.get_last_report()
+
     def test_engine_formatter(self):
         nodes = [dict(id='1', kind='Formatter', name='f1', args=dict(ftype='python', rule='[:]'))]
         edges = [dict(iid='__start__', oid='1'), dict(iid='1', oid='__end__')]
@@ -343,6 +372,13 @@ class TestEngine(unittest.TestCase):
         gid = engine.start(nodes, edges)
         assert engine.run(gid, 1) == '1[2, 4]1'
         assert engine.run(gid, 2) == '2[4, 8]4'
+
+    def test_engine_edge_formatter_from_start(self):
+        nodes = [dict(id='1', kind='Code', name='m1', args=dict(code='def test(x: int):\n    return x\n'))]
+        edges = [dict(iid='__start__', oid='1', formatter='[1:5]'), dict(iid='1', oid='__end__', formatter='[0:2]')]
+        engine = LightEngine()
+        gid = engine.start(nodes, edges)
+        assert engine.run(gid, [0, 1, 2, 3, 4, 5]) == [1, 2]
 
     def test_engine_edge_formatter_start(self):
         nodes = [dict(id='1', kind='Code', name='m1', args=dict(code='def test(x: int): return x')),
@@ -665,12 +701,37 @@ class TestEngine(unittest.TestCase):
         engine.release_node(gid)
         assert '__start__' in engine._nodes and '__end__' in engine._nodes
 
+    def test_engine_reader(self):
+        resources = [dict(id='file-resource', kind='File', name='file', args=dict(id='file-resource'))]
+        nodes = [dict(id='1', kind='Reader', name='m1', args=dict()),
+                 dict(id='2', kind='Reader', name='m2', args=dict(file_resource_id='file-resource'))]
+        data_root_dir = os.getenv("LAZYLLM_DATA_PATH")
+        p = os.path.join(data_root_dir, "rag_master/default/__data/sources/道德经.txt")
+        engine = LightEngine()
+        gid = engine.start(nodes, [['__start__', '1'], ['1', '__end__']], resources)
+        data = engine.run(gid, p)
+        assert '道可道' in data
 
+        engine.reset()
+        gid = engine.start(nodes, [['__start__', '2'], ['2', '__end__']], resources)
+        data = engine.run(gid, p)
+        assert '道可道' in data
+
+        engine.reset()
+        gid = engine.start(nodes, [['__start__', '2'], ['2', '__end__']], resources)
+        file = os.path.join(data_root_dir, "rag_master/default/__data/sources/大学.txt")
+        data = engine.run(gid, p, _file_resources={'file-resource': file})
+        assert '道可道' in data
+        assert '大学之道' in data
+
+@pytest.mark.skip_on_win
+@pytest.mark.skip_on_mac
 class TestEngineRAG(object):
 
     def test_rag(self):
         resources = [
-            dict(id='0', kind='Document', name='d1', args=dict(dataset_path='rag_master', embed='00')),
+            dict(id='0', kind='Document', name='d1', args=dict(
+                dataset_path='rag_master', activated_groups=['CoarseChunk', '00'])),
             dict(id='00', kind='LocalEmbedding', name='e1', args=dict(base_model='bge-large-zh-v1.5'))]
         nodes = [dict(id='1', kind='Retriever', name='ret1',
                       args=dict(doc='0', group_name='CoarseChunk', similarity='bm25_chinese', topk=3)),
@@ -690,7 +751,7 @@ class TestEngineRAG(object):
 
         # test add doc_group
         resources[0] = dict(id='0', kind='Document', name='d1', args=dict(
-            dataset_path='rag_master', server=True, node_group=[
+            dataset_path='rag_master', server=True, activated_groups=['CoarseChunk', '00'], node_group=[
                 dict(name='sentence', transform='SentenceSplitter', chunk_size=100, chunk_overlap=10)]))
         nodes.extend([dict(id='2', kind='Retriever', name='ret2',
                            args=dict(doc='0', group_name='sentence', similarity='bm25', topk=3)),
